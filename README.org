@@ -1,0 +1,30 @@
+#+TITLE: Emacs Plugin for MacOS WeChat
+
+Chat in Emacs via WeChat on macOS.
+
+
+* Installation
+
+** wechat-cli
+#+begin_src shell
+brew install ginqi7/formulae/wechat-cli
+#+end_src
+
+** package
+
+- clone the project in your own emacs configuration files directory, like:
+#+begin_src shell
+  git clone git@github.com:ginqi7/wechat-emacs.git ~/.emacs.d/lisp/wechat-emacs
+#+end_src
+
+- add the path to ‘load-path’
+#+begin_src emacs-lisp
+  (add-to-list 'load-path (expand-file-name "~/.emacs.d/lisp/wechat-emacs"))
+#+end_src
+
+* Configuration
+Add the following line to your Emacs configuration file (e.g., `.emacs` or `init.el`):
+
+#+begin_src emacs-lisp
+  (require 'wechat)
+#+end_src
