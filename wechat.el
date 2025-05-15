@@ -62,12 +62,13 @@
 
 (defun wechat--insert-chat-detail (messages)
   "Insert Chat Detail in Current buffer."
-  (let ()
-    (mapc (lambda (group)
-            (insert (wechat--format-date (gethash "date" group)))
-            (mapc (lambda (message)
-                    (insert (wechat--format-message message)))
-                  (gethash "messages" group)))
+  (let ((date ""))
+    (insert (wechat--format-date date))
+    (mapc (lambda (message)
+            (unless (string= date (gethash "date" message))
+              (setq date (gethash "date" message))
+              (insert (wechat--format-date date)))
+            (insert (wechat--format-message message)))
           messages)
     (insert
      (wechat--format-date "Input"))
@@ -90,8 +91,6 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
                          output-buffer ;; The output will be written to this buffer.
                          (car program-and-args)
                          (cdr program-and-args)))
-
-    (print process)
     (if (null process)
         (progn
           (kill-buffer output-buffer)
@@ -102,7 +101,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
      process
      (lambda (proc msg)
        ;; msg is typically a string like "finished\n" or "exited abnormally with code X\n"
-       (message "Process %s Event: %s" proc msg)
+       ;; (message "Process %s Event: %s" proc msg)
        ;; Ensure that the process has truly ended (either exited or received a termination signal).
        (when (memq (process-status proc) '(exit signal))
          (let ((full-output ""))
@@ -117,21 +116,21 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
            ;; Ensure the buffer still exists and is the previously created one
            (when (and (get-buffer output-buffer-name) (buffer-live-p (get-buffer output-buffer-name)))
              (kill-buffer output-buffer-name))))
-
-
        process))))
 
-(defun wechat--show-chat-detail (json-str)
+
+(defun wechat--show-chat-messages (json-str)
   "Show Chat Detail in a separate buffer."
   (let* ((json (json-parse-string json-str))
          (title (gethash "title" json))
-         (messages (gethash "messages" json)))
+         (msgs (gethash "messages" json)))
     (with-current-buffer (get-buffer-create (format "*WeChat-%s*" title))
       (put-text-property (point-min) (point-max) 'read-only nil)
       (erase-buffer)
-      (wechat--insert-chat-detail messages))))
+      (wechat--insert-chat-detail msgs)
+      (message "Chat Detail Updated"))))
 
-(defun wechat-show (&optional chat-name)
+(defun wechat-show (&optional chat-name only-visible)
   "Show a chat by CHAT-NAME."
   (interactive)
   (unless chat-name
@@ -139,13 +138,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
           (completing-read "Select an chat: "
                            wechat-common-chats)))
   (switch-to-buffer (get-buffer-create (format "*WeChat-%s*" chat-name)))
-  (wechat--run-process (list
-                        wechat-cli
-                        "show"
-                        chat-name
-                        "-f"
-                        "json")
-                       #'wechat--show-chat-detail))
+  (wechat--refresh-messages chat-name))
 
 (defun wechat--send-in-chat ()
   "Send message in Chat."
@@ -160,14 +153,23 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
       (search-forward-regexp "^me >")
       (setq msg (buffer-substring (point) (point-max)))
       (delete-region (point) (point-max)))
-
-    (wechat-send title (string-trim msg))))
+    (wechat-send title msg)))
 
 (defun wechat--show-at-point ()
   "Show Chat at point."
   (interactive)
   (wechat-show (tabulated-list-get-id)))
 
+(defun wechat--refresh-messages (title &optional only-visible)
+  (wechat--run-process (list
+                        wechat-cli
+                        "show"
+                        title
+                        "-o"
+                        (if only-visible "true" "false")
+                        "-f"
+                        "json")
+                       #'wechat--show-chat-messages))
 
 (defun wechat--show-chats (json-str)
   "Show all chats."
@@ -179,20 +181,26 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
       (setq tabulated-list-entries
             (wechat--chats-to-tabulated-entries json))
       (tabulated-list-print t)
-      (goto-char (point-min)))))
+      (goto-char (point-min)))
+    (message "Chats Updated.")))
 
-(defun wechat-list-chats ()
-  "List All Chats."
-  (interactive)
-  (switch-to-buffer (get-buffer-create "*WeChat Chats*"))
-  (wechat-chat-mode)
+(defun wechat--refresh-chats (&optional only-visible)
   (wechat--run-process
    (list
     wechat-cli
     "list-chats"
+    "-o"
+    (if only-visible "true" "false")
     "-f"
     "json")
    #'wechat--show-chats))
+
+(defun wechat-list-chats (&optional only-visible)
+  "List All Chats."
+  (interactive)
+  (switch-to-buffer (get-buffer-create "*WeChat Chats*"))
+  (wechat-chat-mode)
+  (wechat--refresh-chats))
 
 (defun wechat-send (&optional chat-name message)
   "Send MESSAGE to CHAT-NAME."
@@ -208,8 +216,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
                         "send"
                         chat-name
                         message)
-                       (lambda (json-str)
-                         (wechat-show chat-name))))
+                       (lambda (json) (wechat--refresh-messages chat-name))))
 
 (define-derived-mode wechat-chat-list-mode tabulated-list-mode "Wechat Dialogues"
   "Major mode for handling a list of Wechat Dialogue."
@@ -227,7 +234,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
     (use-local-map map)))
 
 
-(define-minor-mode wechat-chat-mode-map
+(define-minor-mode wechat-chat-mode
   "Wechat chat mode."
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "C-c C-c") #'wechat--send-in-chat)
