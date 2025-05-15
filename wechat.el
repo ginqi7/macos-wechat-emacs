@@ -153,6 +153,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
           (completing-read "Select an chat: "
                            wechat-common-chats)))
   (switch-to-buffer (get-buffer-create (format "*WeChat-%s*" chat-name)))
+  (wechat-chat-mode 1)
   (setq-local wechat--chat-title chat-name)
   (wechat--refresh-messages chat-name))
 
@@ -212,7 +213,6 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   "List All Chats."
   (interactive)
   (switch-to-buffer (get-buffer-create "*WeChat Chats*"))
-  (wechat-chat-mode)
   (wechat--refresh-chats))
 
 (defun wechat-send (&optional chat-name message)
