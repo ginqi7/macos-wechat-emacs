@@ -63,8 +63,17 @@
 (defun wechat--format-message (hash-msg)
   "Format Chat Message."
   (let ((user (gethash "user" hash-msg))
-        (msg (gethash "message" hash-msg)))
-    (format "%s > %s \n" user msg)))
+        (msg (gethash "message" hash-msg))
+        (index (gethash "index" hash-msg)))
+    (if (or (string-prefix-p "发送了一个网页," msg)
+            (string= msg "发送了一个图片"))
+        (format "%s > %s \n" user
+                (buttonize
+                 msg
+                 (lambda (data) (wechat-preview
+                                 wechat--chat-title
+                                 (number-to-string index)))))
+      (format "%s > %s \n" user msg))))
 
 (defun wechat--insert-chat-detail (messages)
   "Insert Chat Detail in Current buffer."
@@ -144,16 +153,14 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
           (completing-read "Select an chat: "
                            wechat-common-chats)))
   (switch-to-buffer (get-buffer-create (format "*WeChat-%s*" chat-name)))
+  (setq-local wechat--chat-title chat-name)
   (wechat--refresh-messages chat-name))
 
 (defun wechat--send-in-chat ()
   "Send message in Chat."
   (interactive)
-  (let ((title (substring (substring (buffer-name)
-                                     0 (1- (length (buffer-name))))
-                          (length "*WeChat-")))
+  (let ((title wechat--chat-title)
         (msg))
-
     (save-excursion
       (goto-char (point-min))
       (search-forward-regexp "^me >")
@@ -223,6 +230,22 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
                         chat-name
                         message)
                        (lambda (json) (wechat--refresh-messages chat-name))))
+
+(defun wechat-preview (&optional chat-name index)
+  "Preview MESSAGE in INDEX of CHAT-NAME."
+  (interactive)
+  (unless chat-name
+    (setq chat-name
+          (completing-read "Select an chat: "
+                           wechat-common-chats)))
+  (unless index
+    (setq index (read-string "Input an index :")))
+  (wechat--run-process (list
+                        wechat-cli
+                        "preview"
+                        chat-name
+                        index)
+                       (lambda (json) ())))
 
 (define-derived-mode wechat-chat-list-mode tabulated-list-mode "Wechat Dialogues"
   "Major mode for handling a list of Wechat Dialogue."
