@@ -8,11 +8,25 @@ This plugin, combined with the CLI, allows for easy chatting in Emacs via WeChat
 
 * Features
 This project focuses solely on sending and reading messages without complex management features.
-[x] List all chats
-[x] Show all messages in a chat.
-[x] Send a message to a chat.
-[ ] Preview a image.
-[ ] Preview a link.
+- [x] List chats
+- [x] Show messages in a chat.
+- [x] Send a message to a chat.
+- [x] Preview a image.
+- [x] Preview a link.
+
+* Examples
+** List chats
+[[file:examples/list-chats.png]]
+** Show Messages
+[[file:examples/show-messages.png]]
+** Preview images
+[[file:examples/preview.png]]
+Click the buttonized-string, A WeChat preview window will appear.
+
+* Usage
+1. Use =wechat-list-chats= to display your chats.
+2. Press <return> in the chat list to display the chat messages.
+3. Enter your message in the chat message buffer and press <return> to send.
 
 * Installation
 
@@ -39,6 +53,11 @@ Add the following line to your Emacs configuration file (e.g., `.emacs` or `init
 #+begin_src emacs-lisp
   (require 'wechat)
 #+end_src
+** Variables
+| name                | description                             | default value              |
+| wechat-cli          | The path of wechat-cli command          | (executable-find "wechat") |
+| wechat-common-chats | The list of wechat-cli Common Contacts. | nil                        |
 
 * Identified Issues
 1. Unable to bind ~wechat--send-in-chat~ to multiple keys in the keymap.
+2. The current version of wechat-cli contains many hardcoded elements, limiting its support to Chinese only.

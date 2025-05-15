@@ -28,7 +28,7 @@
   "The path of wechat-cli command.")
 
 (defcustom wechat-common-chats nil
-  "The path of wechat-cli Common Contacts.")
+  "The list of wechat-cli Common Contacts.")
 
 (defun wechat--chats-to-tabulated-entries (json)
   "Convert chats json to tabulated-entries."
