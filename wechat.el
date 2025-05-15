@@ -43,6 +43,12 @@
                    (number-to-string (gethash "unread" item)))))
           json))
 
+(defun wechat--json-parse-string (json-str)
+  (condition-case err
+      (json-parse-string json-str)
+    (json-parse-error
+     (error "JSON parse Error: %s" json-str))))
+
 (defun wechat--format-date (date-str)
   "Format Chat Date."
   (let* ((width (window-width))
@@ -121,7 +127,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
 
 (defun wechat--show-chat-messages (json-str)
   "Show Chat Detail in a separate buffer."
-  (let* ((json (json-parse-string json-str))
+  (let* ((json (wechat--json-parse-string json-str))
          (title (gethash "title" json))
          (msgs (gethash "messages" json)))
     (with-current-buffer (get-buffer-create (format "*WeChat-%s*" title))
@@ -174,7 +180,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
 (defun wechat--show-chats (json-str)
   "Show all chats."
   (with-current-buffer (get-buffer-create "*WeChat Chats*")
-    (let ((json (json-parse-string json-str))
+    (let ((json (wechat--json-parse-string json-str))
           (buffer-read-only))
       (erase-buffer)
       (wechat-chat-list-mode)
@@ -237,7 +243,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
 (define-minor-mode wechat-chat-mode
   "Wechat chat mode."
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-c C-c") #'wechat--send-in-chat)
+            (define-key map (kbd "<return>") #'wechat--send-in-chat)
             map)
   :init-value nil)
 

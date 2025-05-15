@@ -2,6 +2,17 @@
 
 Chat in Emacs via WeChat on macOS.
 
+There is a CLI tool ([[https://github.com/ginqi7/macos-wechat-cli][macos-wechat-cli]]) to interact with MacOS WeChat.
+
+This plugin, combined with the CLI, allows for easy chatting in Emacs via WeChat.
+
+* Features
+This project focuses solely on sending and reading messages without complex management features.
+[x] List all chats
+[x] Show all messages in a chat.
+[x] Send a message to a chat.
+[ ] Preview a image.
+[ ] Preview a link.
 
 * Installation
 
@@ -28,3 +39,6 @@ Add the following line to your Emacs configuration file (e.g., `.emacs` or `init
 #+begin_src emacs-lisp
   (require 'wechat)
 #+end_src
+
+* Identified Issues
+1. Unable to bind ~wechat--send-in-chat~ to multiple keys in the keymap.
