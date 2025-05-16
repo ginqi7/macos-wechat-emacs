@@ -247,6 +247,11 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
                         index)
                        (lambda (json) ())))
 
+(defun wechat-refresh-message ()
+  (interactive)
+  (when wechat--chat-title)
+  (wechat--refresh-messages wechat--chat-title))
+
 (define-derived-mode wechat-chat-list-mode tabulated-list-mode "Wechat Dialogues"
   "Major mode for handling a list of Wechat Dialogue."
   (setq tabulated-list-format [("Title" 30 t)
@@ -267,6 +272,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   "Wechat chat mode."
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "<return>") #'wechat--send-in-chat)
+            (define-key map (kbd "<f5>") #'wechat-refresh-message)
             map)
   :init-value nil)
 
