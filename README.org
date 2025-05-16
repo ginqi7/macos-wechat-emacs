@@ -2,6 +2,8 @@
 
 Chat in Emacs via WeChat on macOS.
 
+*The current version only supports Wechat 3.8 and simplified Chinese on WeChat.*
+
 There is a CLI tool ([[https://github.com/ginqi7/macos-wechat-cli][macos-wechat-cli]]) to interact with MacOS WeChat.
 
 This plugin, combined with the CLI, allows for easy chatting in Emacs via WeChat.
