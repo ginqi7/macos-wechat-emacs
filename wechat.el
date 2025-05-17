@@ -39,6 +39,14 @@
 (defcustom wechat-message-date-seperator "-"
   "The seperator for message date.")
 
+(defcustom wechat-message-region-max-width 120
+  "The max width for message region.")
+
+(defface wechat-message-user
+  '((t (:foreground "#7757d6")))
+  "wechat message user face."
+  :group 'wechat)
+
 (defvar wechat--input-marker nil)
 (make-variable-buffer-local 'wechat--input-marker)
 
@@ -66,8 +74,8 @@
 
 (defun wechat--format-date (date-str)
   "Format Chat Date."
-  (let* ((width (window-width))
-         (half-width (- (/ width 2) (length date-str) 10))
+  (let* ((width (min wechat-message-region-max-width (window-width)))
+         (half-width (- (/ width 2) (length date-str)))
          (split-line (make-string half-width (string-to-char wechat-message-date-seperator))))
     (concat "\n"
             split-line
@@ -77,7 +85,8 @@
 
 (defun wechat--format-message (hash-msg)
   "Format Chat Message."
-  (let ((user (gethash "user" hash-msg))
+  (let ((user (propertize (gethash "user" hash-msg)
+                          'face 'wechat-message-user))
         (msg (gethash "message" hash-msg))
         (index (gethash "index" hash-msg)))
     (if (or (string-prefix-p "发送了一个网页," msg)
@@ -94,8 +103,10 @@
 
 (defun wechat--insert-chat-detail (messages)
   "Insert Chat Detail in Current buffer."
-  (let ((date "")
-        (inhibit-read-only t))
+  (let* ((date "")
+         (inhibit-read-only t)
+         (max-width (or wechat-message-region-max-width (window-width)))
+         (margin (/ (- (window-width) max-width) 2)))
     (insert (wechat--format-date date))
     (mapc (lambda (message)
             (unless (string= date (gethash "date" message))
@@ -111,6 +122,8 @@
                         'rear-nonsticky t
                         'front-sticky t
                         'read-only t))
+    (set-left-margin (point-min) (point-max) margin)
+    (set-right-margin (point-min) (point-max) margin)
     (setq-local wechat--input-marker (mark-marker))
     (set-marker wechat--input-marker (point))))
 
