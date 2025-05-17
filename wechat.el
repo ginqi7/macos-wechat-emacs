@@ -81,6 +81,7 @@
         (msg (gethash "message" hash-msg))
         (index (gethash "index" hash-msg)))
     (if (or (string-prefix-p "发送了一个网页," msg)
+            (string-prefix-p "发送了一个视频," msg)
             (string= msg "发送了一个图片"))
         (format "%s %s %s \n" user
                 wechat-message-seperator
