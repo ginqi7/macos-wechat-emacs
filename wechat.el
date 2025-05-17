@@ -53,13 +53,20 @@
 (defvar wechat--chat-title nil)
 (make-variable-buffer-local 'wechat--chat-title)
 
+(defun wechat--tabulated-entries-truncate-string (string maxlen)
+  (if (> (length string) maxlen)
+      (concat (substring string 0 maxlen) "…")
+    string))
+
 (defun wechat--chats-to-tabulated-entries (json)
   "Convert chats json to tabulated-entries."
   (mapcar (lambda (item)
             (list (gethash "title" item)
                   (vector
                    (gethash "title" item)
-                   (gethash "lastMessage" item)
+                   (wechat--tabulated-entries-truncate-string
+                    (string-replace  "\n" "" (gethash "lastMessage" item))
+                    30)
                    (gethash "lastDate" item)
                    (symbol-name (gethash "messageMute" item))
                    (symbol-name (gethash "stick" item))
