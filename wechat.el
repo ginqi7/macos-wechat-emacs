@@ -42,9 +42,25 @@
 (defcustom wechat-message-region-max-width 120
   "The max width for message region.")
 
+(defcustom wechat-chat-list-region-max-width 170
+  "The max width for chat list region.")
+
+(defcustom wechat-mute-symbol "🔕"
+  "The symbol to express mute.")
+(defcustom wechat-stick-symbol "❤️"
+  "The symbol to express stick.")
+
+(defcustom wechat-unread-symbol "📩"
+  "The symbol to express unread.")
+
 (defface wechat-message-user
   '((t (:foreground "#7757d6")))
   "wechat message user face."
+  :group 'wechat)
+
+(defface wechat-unread
+  '((t (:foreground "red" :weight bold)))
+  "wechat unread"
   :group 'wechat)
 
 (defvar wechat--input-marker nil)
@@ -53,24 +69,27 @@
 (defvar wechat--chat-title nil)
 (make-variable-buffer-local 'wechat--chat-title)
 
-(defun wechat--tabulated-entries-truncate-string (string maxlen)
-  (if (> (length string) maxlen)
-      (concat (substring string 0 maxlen) "…")
-    string))
-
 (defun wechat--chats-to-tabulated-entries (json)
   "Convert chats json to tabulated-entries."
   (mapcar (lambda (item)
             (list (gethash "title" item)
                   (vector
+                   (if (string= "t" (symbol-name (gethash "messageMute" item)))
+                       wechat-mute-symbol
+                     (if (string= "t" (symbol-name (gethash "stick" item)))
+                         wechat-stick-symbol
+                       ""))
                    (gethash "title" item)
-                   (wechat--tabulated-entries-truncate-string
-                    (string-replace  "\n" "" (gethash "lastMessage" item))
-                    30)
-                   (gethash "lastDate" item)
-                   (symbol-name (gethash "messageMute" item))
-                   (symbol-name (gethash "stick" item))
-                   (number-to-string (gethash "unread" item)))))
+                   (propertize
+                    (if (not (equal 0 (gethash "unread" item)))
+                        (concat (number-to-string (gethash "unread" item))
+                                " "
+                                wechat-unread-symbol)
+                      "")
+                    'face 'wechat-unread)
+                   (string-replace  "\n" "" (gethash "lastMessage" item))
+                   (gethash "lastDate" item))))
+
           json))
 
 (defun wechat--json-parse-string (json-str)
@@ -108,12 +127,18 @@
                                  (number-to-string index)))))
       (format "%s %s %s \n" user wechat-message-seperator msg))))
 
+(defun wechat--set-margin (max-width)
+  (let ((max-width (or max-width (window-width)))
+        (margin (/ (- (window-width) max-width) 2))
+        (inhibit-read-only t))
+    (set-left-margin (point-min) (point-max) margin)
+    (set-right-margin (point-min) (point-max) margin)))
+
+
 (defun wechat--insert-chat-detail (messages)
   "Insert Chat Detail in Current buffer."
   (let* ((date "")
-         (inhibit-read-only t)
-         (max-width (or wechat-message-region-max-width (window-width)))
-         (margin (/ (- (window-width) max-width) 2)))
+         (inhibit-read-only t))
     (insert (wechat--format-date date))
     (mapc (lambda (message)
             (unless (string= date (gethash "date" message))
@@ -129,8 +154,7 @@
                         'rear-nonsticky t
                         'front-sticky t
                         'read-only t))
-    (set-left-margin (point-min) (point-max) margin)
-    (set-right-margin (point-min) (point-max) margin)
+    (wechat--set-margin wechat-message-region-max-width)
     (setq-local wechat--input-marker (mark-marker))
     (set-marker wechat--input-marker (point))))
 
@@ -239,6 +263,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
       (setq tabulated-list-entries
             (wechat--chats-to-tabulated-entries json))
       (tabulated-list-print t)
+      ;; (wechat--set-margin wechat-chat-list-region-max-width)
       (goto-char (point-min)))
     (message "Chats Updated.")))
 
@@ -298,15 +323,22 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
 
 (define-derived-mode wechat-chat-list-mode tabulated-list-mode "Wechat Dialogues"
   "Major mode for handling a list of Wechat Dialogue."
-  (setq tabulated-list-format [("Title" 30 t)
-                               ("Last Message" 60 t)
-                               ("Last Date" 20 t)
-                               ("Mute" 10 t)
-                               ("Stick" 10 t)
-                               ("Unread" 10 t)])
-  (setq tabulated-list-padding 2)
+  (let* ((max-width (min (window-width) wechat-chat-list-region-max-width))
+         (state-width 2)
+         (last-date-width 20)
+         (unread-width 10)
+         (rest-width (- max-width state-width last-date-width unread-width))
+         (title-width (/ rest-width 3))
+         (last-message-width (- rest-width title-width)))
+    (setq tabulated-list-format (vector
+                                 (list "" state-width t)
+                                 (list "Title" title-width t)
+                                 (list "Unread" unread-width  t :right-align t)
+                                 (list "Last Message" last-message-width t)
+                                 (list "Last Date" last-date-width t  :right-align t))))
   (tabulated-list-init-header)
   (tabulated-list-print t)
+  (setq buffer-read-only t)
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") 'wechat--show-at-point)
     (use-local-map map)))
