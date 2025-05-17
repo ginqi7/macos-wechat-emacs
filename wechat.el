@@ -30,6 +30,21 @@
 (defcustom wechat-common-chats nil
   "The list of wechat-cli Common Contacts.")
 
+(defcustom wechat-input-prompt ">>> "
+  "The prompt for input.")
+
+(defcustom wechat-message-seperator ">"
+  "The seperator for message.")
+
+(defcustom wechat-message-date-seperator "-"
+  "The seperator for message date.")
+
+(defvar wechat--input-marker nil)
+(make-variable-buffer-local 'wechat--input-marker)
+
+(defvar wechat--chat-title nil)
+(make-variable-buffer-local 'wechat--chat-title)
+
 (defun wechat--chats-to-tabulated-entries (json)
   "Convert chats json to tabulated-entries."
   (mapcar (lambda (item)
@@ -52,8 +67,8 @@
 (defun wechat--format-date (date-str)
   "Format Chat Date."
   (let* ((width (window-width))
-         (half-width (- (/ width 2) 10))
-         (split-line (make-string half-width ?-)))
+         (half-width (- (/ width 2) (length date-str) 10))
+         (split-line (make-string half-width (string-to-char wechat-message-date-seperator))))
     (concat "\n"
             split-line
             date-str
@@ -67,17 +82,19 @@
         (index (gethash "index" hash-msg)))
     (if (or (string-prefix-p "发送了一个网页," msg)
             (string= msg "发送了一个图片"))
-        (format "%s > %s \n" user
+        (format "%s %s %s \n" user
+                wechat-message-seperator
                 (buttonize
                  msg
                  (lambda (data) (wechat-preview
                                  wechat--chat-title
                                  (number-to-string index)))))
-      (format "%s > %s \n" user msg))))
+      (format "%s %s %s \n" user wechat-message-seperator msg))))
 
 (defun wechat--insert-chat-detail (messages)
   "Insert Chat Detail in Current buffer."
-  (let ((date ""))
+  (let ((date "")
+        (inhibit-read-only t))
     (insert (wechat--format-date date))
     (mapc (lambda (message)
             (unless (string= date (gethash "date" message))
@@ -87,7 +104,14 @@
           messages)
     (insert
      (wechat--format-date "Input"))
-    (insert "me > ")))
+    (align-regexp (point-min) (point-max) (format "\\(\\s-*\\)%s" wechat-message-seperator))
+    (add-text-properties (point-min) (1- (point-max)) '(read-only t))
+    (insert (propertize wechat-input-prompt
+                        'rear-nonsticky t
+                        'front-sticky t
+                        'read-only t))
+    (setq-local wechat--input-marker (mark-marker))
+    (set-marker wechat--input-marker (point))))
 
 (defun wechat--run-process (program-and-args callback-fn)
   "Run PROGRAM-AND-ARGS and use the sentinel function to capture its complete output after the process terminates.
@@ -138,9 +162,9 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   "Show Chat Detail in a separate buffer."
   (let* ((json (wechat--json-parse-string json-str))
          (title (gethash "title" json))
-         (msgs (gethash "messages" json)))
+         (msgs (gethash "messages" json))
+         (inhibit-read-only t))
     (with-current-buffer (get-buffer-create (format "*WeChat-%s*" title))
-      (put-text-property (point-min) (point-max) 'read-only nil)
       (erase-buffer)
       (wechat--insert-chat-detail msgs)
       (message "Chat Detail Updated"))))
@@ -163,8 +187,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   (let ((title wechat--chat-title)
         (msg))
     (save-excursion
-      (goto-char (point-min))
-      (search-forward-regexp "^me >")
+      (goto-char (marker-position wechat--input-marker))
       (setq msg (buffer-substring (point) (point-max)))
       (delete-region (point) (point-max)))
     (wechat-send title msg)))
