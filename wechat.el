@@ -56,6 +56,9 @@
 (defcustom wechat-notification-time 3
   "notification time")
 
+(defcustom wechat-emoji-directory nil
+  "Emoji directory.")
+
 (defface wechat-message-user
   '((t (:foreground "#7757d6")))
   "wechat message user face."
@@ -69,6 +72,8 @@
 (defvar wechat--notification-timer nil)
 
 (defvar wechat--unreads nil)
+
+(defvar wechat--emojis nil)
 
 (defvar wechat--input-marker nil)
 (make-variable-buffer-local 'wechat--input-marker)
@@ -116,6 +121,39 @@
             split-line
             "\n" "\n")))
 
+
+(defun wechat--format-emoji (msg)
+  (if (or wechat--emojis
+          wechat-emoji-directory)
+      (progn
+        (unless wechat--emojis
+          (setq wechat--emojis
+                (mapcar (lambda (item) (format "[%s]" (file-name-base item)))
+                        (directory-files wechat-emoji-directory nil "\\.png$"))))
+        (let ((str msg)
+              (regexp "\\[.*?\\]")
+              (pos 0)
+              match
+              img
+              img-path)
+          (while (string-match regexp str pos)
+            (setq match (match-string 0 str))
+            (when (member match wechat--emojis)
+              (setq img-path (file-name-concat
+                              wechat-emoji-directory
+                              (concat (substring match 1 -1) ".png")))
+              (setq img (create-image img-path
+                                      nil nil
+                                      :height (line-pixel-height)))
+
+
+              (setq msg (string-replace match
+                                        (propertize match 'display img)
+                                        msg)))
+            (setq pos (match-end 0)))
+          msg))
+    msg))
+
 (defun wechat--format-message (hash-msg)
   "Format Chat Message."
   (let ((user (propertize (gethash "user" hash-msg)
@@ -132,7 +170,8 @@
                  (lambda (data) (wechat-preview
                                  wechat--chat-title
                                  (number-to-string index)))))
-      (format "%s %s %s \n" user wechat-message-seperator msg))))
+      (format "%s %s %s \n" user wechat-message-seperator
+              (wechat--format-emoji msg)))))
 
 (defun wechat--set-margin (max-width)
   (let ((max-width (or max-width (window-width)))
