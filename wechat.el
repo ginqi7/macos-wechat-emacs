@@ -397,11 +397,11 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
                                 (> (gethash "unread" item) 0))
                               json)))
     (setq wechat--unreads unreads)
-    (when wechat--chat-title
-      (and (seq-find
-            (lambda (item)
-              (string= wechat--chat-title (gethash "title" item)))
-            wechat--unreads))
+    (when (and wechat--chat-title
+               (seq-find
+                (lambda (item)
+                  (string= wechat--chat-title (gethash "title" item)))
+                wechat--unreads))
       (wechat-refresh-message))))
 
 (defun wechat-start-notification ()
