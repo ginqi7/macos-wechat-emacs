@@ -123,35 +123,18 @@
 
 
 (defun wechat--format-emoji (msg)
-  (if (or wechat--emojis
-          wechat-emoji-directory)
-      (progn
-        (unless wechat--emojis
-          (setq wechat--emojis
-                (mapcar (lambda (item) (format "[%s]" (file-name-base item)))
-                        (directory-files wechat-emoji-directory nil "\\.png$"))))
-        (let ((str msg)
-              (regexp "\\[.*?\\]")
-              (pos 0)
-              match
-              img
-              img-path)
-          (while (string-match regexp str pos)
-            (setq match (match-string 0 str))
-            (when (member match wechat--emojis)
-              (setq img-path (file-name-concat
-                              wechat-emoji-directory
-                              (concat (substring match 1 -1) ".png")))
-              (setq img (create-image img-path
-                                      nil nil
-                                      :height (line-pixel-height)))
-
-
-              (setq msg (string-replace match
-                                        (propertize match 'display img)
-                                        msg)))
-            (setq pos (match-end 0)))
-          msg))
+  (let ((str msg)
+        (regexp "\\[.*?\\]")
+        (pos 0)
+        match
+        img
+        img-path)
+    (while (string-match regexp str pos)
+      (setq match (match-string 0 str))
+      (setq msg (string-replace match
+                                (wechat-emoji-format-image match)
+                                msg))
+      (setq pos (match-end 0)))
     msg))
 
 (defun wechat--format-message (hash-msg)
