@@ -53,6 +53,9 @@
 (defcustom wechat-unread-symbol "📩"
   "The symbol to express unread.")
 
+(defcustom wechat-notification-time 3
+  "notification time")
+
 (defface wechat-message-user
   '((t (:foreground "#7757d6")))
   "wechat message user face."
@@ -62,6 +65,10 @@
   '((t (:foreground "red" :weight bold)))
   "wechat unread"
   :group 'wechat)
+
+(defvar wechat--notification-timer nil)
+
+(defvar wechat--unreads nil)
 
 (defvar wechat--input-marker nil)
 (make-variable-buffer-local 'wechat--input-marker)
@@ -320,6 +327,80 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   (interactive)
   (when wechat--chat-title)
   (wechat--refresh-messages wechat--chat-title))
+
+(defun wechat-check-in-foreground ()
+  "Check if Emacs is foreground"
+  (wechat--run-process
+   (list
+    "osascript"
+    "-e"
+    "tell application \"System Events\" to get name of first application process whose frontmost is true")
+   #'wechat-check-unread))
+
+
+(defun wechat-check-unread (str)
+  "Check unread."
+  (when (string= "Emacs" (string-trim str))
+    (wechat--run-process
+     (list
+      wechat-cli
+      "list-chats"
+      "-o"
+      "true"
+      "-f"
+      "json")
+     #'wechat--check-unread)))
+
+(defun wechat--check-unread (json-str)
+  "Check unread by response JSON-STR."
+  (let* ((json (wechat--json-parse-string json-str))
+         (unreads (seq-filter (lambda (item)
+                                (> (gethash "unread" item) 0))
+                              json)))
+    (setq wechat--unreads unreads)))
+
+(defun wechat-start-notification ()
+  "Start a timer to check notification."
+  (interactive)
+  (unless wechat--notification-timer
+    (setq wechat--notification-timer
+          (run-at-time wechat-notification-time
+                       wechat-notification-time #'wechat-check-in-foreground))))
+
+(defun wechat-restart-notification ()
+  "Restart a timer to check notification."
+  (interactive)
+  (wechat-stop-notification)
+  (wechat-start-notification))
+
+(defun wechat-stop-notification ()
+  "Stop a timer to check notification."
+  (interactive)
+  (when wechat--notification-timer
+    (cancel-timer wechat--notification-timer)
+    (setq wechat--notification-timer nil)))
+
+(defun wechat-awesome-tray-notification ()
+  (let ((unread-str
+         (string-join
+          (mapcar
+           (lambda (item)
+             (format
+              "%s:%s"
+              (propertize (gethash "title" item)
+                          'face 'wechat-message-user)
+              (propertize (number-to-string (gethash "unread" item))
+                          'face 'wechat-unread)))
+           wechat--unreads)
+          ";")))
+    (when (not (string-empty-p unread-str))
+      (concat
+       wechat-unread-symbol
+       unread-str))))
+
+(if (featurep 'awesome-tray)
+    (add-to-list 'awesome-tray-module-alist
+                 '("wechat-notification" . (wechat-awesome-tray-notification))))
 
 (define-derived-mode wechat-chat-list-mode tabulated-list-mode "Wechat Dialogues"
   "Major mode for handling a list of Wechat Dialogue."
