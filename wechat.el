@@ -364,8 +364,8 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   (interactive)
   (unless wechat--notification-timer
     (setq wechat--notification-timer
-          (run-at-time wechat-notification-time
-                       wechat-notification-time #'wechat-check-in-foreground))))
+          (run-with-idle-timer wechat-notification-time
+                               wechat-notification-time #'wechat-check-in-foreground))))
 
 (defun wechat-restart-notification ()
   "Restart a timer to check notification."
