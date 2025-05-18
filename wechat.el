@@ -325,8 +325,8 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
 
 (defun wechat-refresh-message ()
   (interactive)
-  (when wechat--chat-title)
-  (wechat--refresh-messages wechat--chat-title))
+  (when wechat--chat-title
+    (wechat--refresh-messages wechat--chat-title)))
 
 (defun wechat-check-in-foreground ()
   "Check if Emacs is foreground"
@@ -357,7 +357,13 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
          (unreads (seq-filter (lambda (item)
                                 (> (gethash "unread" item) 0))
                               json)))
-    (setq wechat--unreads unreads)))
+    (setq wechat--unreads unreads)
+    (when wechat--chat-title
+      (and (seq-find
+            (lambda (item)
+              (string= wechat--chat-title (gethash "title" item)))
+            wechat--unreads))
+      (wechat-refresh-message))))
 
 (defun wechat-start-notification ()
   "Start a timer to check notification."
