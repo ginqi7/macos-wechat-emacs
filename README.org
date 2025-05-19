@@ -13,8 +13,7 @@ This project focuses solely on sending and reading messages without complex mana
 - [x] List chats
 - [x] Show messages in a chat.
 - [x] Send a message to a chat.
-- [x] Preview a image.
-- [x] Preview a link.
+- [x] Preview images or links or videos.
 
 * Examples
 ** List chats

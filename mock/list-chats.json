@@ -1,0 +1,82 @@
+[
+  {
+    "index": 0,
+    "lastDate": "20:20",
+    "lastMessage": "￼",
+    "messageMute": false,
+    "messages": [],
+    "stick": true,
+    "title": "xiaoming",
+    "unread": 0
+  },
+  {
+    "index": 1,
+    "lastDate": "13:47",
+    "lastMessage": "￼￼￼",
+    "messageMute": false,
+    "messages": [],
+    "stick": true,
+    "title": "xiaohong",
+    "unread": 0
+  },
+  {
+    "index": 2,
+    "lastDate": "2025\/05\/10",
+    "lastMessage": "[哈哈]",
+    "messageMute": false,
+    "messages": [],
+    "stick": true,
+    "title": "xiaoming、xiaohong、小绿、小蓝",
+    "unread": 0
+  },
+  {
+    "index": 3,
+    "lastDate": "20:16",
+    "lastMessage": "HelloWord: MacOS 微信 CLI",
+    "messageMute": false,
+    "messages": [],
+    "stick": false,
+    "title": "公众号",
+    "unread": 1
+  },
+  {
+    "index": 4,
+    "lastDate": "2025\/05\/16",
+    "lastMessage": "小西瓜: 下次请你吃饭￼",
+    "messageMute": true,
+    "messages": [],
+    "stick": false,
+    "title": "2025",
+    "unread": 0
+  },
+  {
+    "index": 6,
+    "lastDate": "2025\/05\/14",
+    "lastMessage": "Hi.如果你对我的博客感兴趣:qiqijin.com",
+    "messageMute": false,
+    "messages": [],
+    "stick": false,
+    "title": "夜神月",
+    "unread": 0
+  },
+  {
+    "index": 7,
+    "lastDate": "2025\/05\/14",
+    "lastMessage": "一个大数据、分布式系统开发的程序员。\n Emacs 插件开发者。\n 喜欢读杂书，写闲文。",
+    "messageMute": false,
+    "messages": [],
+    "stick": false,
+    "title": "落花人",
+    "unread": 0
+  },
+  {
+    "index": 8,
+    "lastDate": "2025\/05\/12",
+    "lastMessage": "A programmer interested in big data, distributed systems.\n An emacser dedicated to enhancing the efficiency and enjoyment of editing.\n An amateur enthusiast who enjoys reading and writing.",
+    "messageMute": true,
+    "messages": [],
+    "stick": false,
+    "title": "天使",
+    "unread": 0
+  }
+]
