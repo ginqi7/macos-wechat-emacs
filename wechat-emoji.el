@@ -31,27 +31,29 @@
    "wechat-emojis.png"))
 
 (defvar wechat-emojis
-  '(("[微笑]" "[撇嘴]" "[色]" "[发呆]" "[得意]" "[流泪]" "[害羞]" "[闭嘴]" "[睡]" "[大哭]")
-    ("[尴尬]" "[发怒]" "[调皮]" "[呲牙]" "[惊讶]" "[难过]" "[囧]" "[抓狂]" "[吐]" "[偷笑]")
-    ("[愉快]" "[白眼]" "[傲慢]" "[困]" "[惊恐]" "[憨笑]" "[悠闲]" "[咒骂]" "[疑问]" "[嘘]")
-    ("[晕]" "[衰]" "[骷髅]" "[敲打]" "[再见]" "[擦汗]" "[抠鼻]" "[鼓掌]" "[坏笑]" "[右哼哼]")
-    ("[鄙视]" "[委屈]" "[快哭了]" "[阴险]" "[亲亲]" "[可怜]" "[笑脸]" "[生病]" "[脸红]" "[破涕为笑]")
-    ("[恐惧]" "[失望]" "[无语]" "[嘿哈]" "[捂脸]" "[奸笑]" "[机智]" "[皱眉]" "[耶]" "[吃瓜]")
-    ("[加油]" "[汗]" "[天啊]" "[Emm]" "[社会社会]" "[旺柴]" "[好的]" "[打脸]" "[哇]" "[翻白眼]")
-    ("[666]" "[让我看看]" "[叹气]" "[苦涩]" "[裂开]" "[嘴唇]" "[爱心]" "[心碎]" "[拥抱]" "[强]")
-    ("[弱]" "[握手]" "[胜利]" "[抱拳]" "[勾引]" "[拳头]" "[OK]" "[合十]" "[啤酒]" "[咖啡]")
-    ("[蛋糕]" "[玫瑰]" "[凋谢]" "[菜刀]" "[炸弹]" "[便便]" "[月亮]" "[太阳]" "[庆祝]" "[礼物]")
-    ("[红包]" "[福]" "[烟花]" "[猪头]" "[跳跳]" "[发抖]" "[转圈]")))
+  '("[微笑]" "[撇嘴]" "[色]" "[发呆]" "[得意]" "[流泪]" "[害羞]" "[闭嘴]" "[睡]" "[大哭]"
+    "[尴尬]" "[发怒]" "[调皮]" "[呲牙]" "[惊讶]" "[难过]" "[囧]" "[抓狂]" "[吐]" "[偷笑]"
+    "[愉快]" "[白眼]" "[傲慢]" "[困]" "[惊恐]" "[憨笑]" "[悠闲]" "[咒骂]" "[疑问]" "[嘘]"
+    "[晕]" "[衰]" "[骷髅]" "[敲打]" "[再见]" "[擦汗]" "[抠鼻]" "[鼓掌]" "[坏笑]" "[右哼哼]"
+    "[鄙视]" "[委屈]" "[快哭了]" "[阴险]" "[亲亲]" "[可怜]" "[笑脸]" "[生病]" "[脸红]" "[破涕为笑]"
+    "[恐惧]" "[失望]" "[无语]" "[嘿哈]" "[捂脸]" "[奸笑]" "[机智]" "[皱眉]" "[耶]" "[吃瓜]"
+    "[加油]" "[汗]" "[天啊]" "[Emm]" "[社会社会]" "[旺柴]" "[好的]" "[打脸]" "[哇]" "[翻白眼]"
+    "[666]" "[让我看看]" "[叹气]" "[苦涩]" "[裂开]" "[嘴唇]" "[爱心]" "[心碎]" "[拥抱]" "[强]"
+    "[弱]" "[握手]" "[胜利]" "[抱拳]" "[勾引]" "[拳头]" "[OK]" "[合十]" "[啤酒]" "[咖啡]"
+    "[蛋糕]" "[玫瑰]" "[凋谢]" "[菜刀]" "[炸弹]" "[便便]" "[月亮]" "[太阳]" "[庆祝]" "[礼物]"
+    "[红包]" "[福]" "[烟花]" "[猪头]" "[跳跳]" "[发抖]" "[转圈]"))
 
 (defvar wechat-emoji-locations-map nil)
 
 (defun wechat-emoji--locations-map ()
-  (let ((table (make-hash-table :test #'equal)))
-    (cl-loop for i from 0 to (length wechat-emojis)
+  (let ((table (make-hash-table :test #'equal))
+        i j)
+
+    (cl-loop for idx from 0 to (length wechat-emojis)
              do
-             (cl-loop for j from 0 to (length (nth i wechat-emojis))
-                      do
-                      (puthash (nth j (nth i wechat-emojis)) (cons i j) table)))
+             (setq i (/ idx  10))
+             (setq j (% idx 10))
+             (puthash (nth idx wechat-emojis) (cons i j) table))
     table))
 
 (defun wechat-emoji-format-image (name)
@@ -69,10 +71,25 @@
                 (y (* height (car location))))
       (setq str
             (propertize
-             "."
+             name
              'display
              (list (list 'slice x y width height) image))))
     str))
+
+
+(defun wechat-emoji-annotation-function (candidate)
+  "Return annotation for CANDIDATE."
+  (let ((annotation (wechat-emoji-format-image candidate)))
+    (when annotation
+      (concat "  " annotation))))
+
+(defun wechat-emoji-input ()
+  "Select an emoji to input."
+  (interactive)
+  (let ((completion-extra-properties
+         '(:annotation-function wechat-emoji-annotation-function)))
+    (insert (completing-read "Select an emoji: "
+                             wechat-emojis))))
 
 (provide 'wechat-emoji)
 ;;; wechat-emoji.el ends here
