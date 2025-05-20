@@ -36,10 +36,10 @@
   "The prompt for input.")
 
 (defcustom wechat-message-seperator ">"
-  "The seperator for message.")
+  "The separator for message.")
 
 (defcustom wechat-message-date-seperator "-"
-  "The seperator for message date.")
+  "The separator for message date.")
 
 (defcustom wechat-message-region-max-width 120
   "The max width for message region.")

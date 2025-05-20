@@ -43,6 +43,9 @@
     "[蛋糕]" "[玫瑰]" "[凋谢]" "[菜刀]" "[炸弹]" "[便便]" "[月亮]" "[太阳]" "[庆祝]" "[礼物]"
     "[红包]" "[福]" "[烟花]" "[猪头]" "[跳跳]" "[发抖]" "[转圈]"))
 
+(defvar wechat-emojis-en
+  '("[Smile]" "[Grimace]" "[Drool]" "[Scowl]" "[CoolGuy]" "[Sob]" "[Shy]" "[Silent]" "[Sleep]" "[Cry]" "[Awkward]" "[Angry]" "[Tongue]" "[Grin]" "[Surprise]" "[Frown]" "[Blush]" "[Scream]" "[Puke]" "[Chuckle]" "[Joyful]" "[Slight]" "[Smug]" "[Drowsy]" "[Panic]" "[Laugh]" "[Commando]" "[Scold]" "[Shocked]" "[Shhh]" "[Dizzy]" "[Toasted]" "[Skull]" "[Hammer]" "[Bye]" "[Speechless]" "[NosePick]" "[Clap]" "[Trick]" "[Bah！R]" "[Pooh-pooh]" "[Shrunken]" "[TearingUp]" "[Sly]" "[Kiss]" "[Whimper]" "[Happy]" "[Sick]" "[Flushed]" "[Lol]" "[Terror]" "[Let Down]" "[Duh]" "[Hey]" "[Facepalm]" "[Smirk]" "[Smart]" "[Concerned]" "[Yeah!]" "[Onlooker]" "[GoForIt]" "[Sweats]" "[OMG]" "[Emm]" "[Respect]" "[Doge]" "[NoProb]" "[MyBad]" "[Wow]" "[Boring]" "[Awesome]" "[LetMeSee]" "[Sigh]" "[Hurt]" "[Broken]" "[Lips]" "[Heart]" "[BrokenHeart]" "[Hug]" "[ThumbsUp]" "[ThumbsDown]" "[Shake]" "[Peace]" "[Salute]" "[Beckon]" "[Fist]" "[OK]" "[Worship]" "[Beer]" "[Coffee]" "[Cake]" "[Rose]" "[Wilt]" "[Cleaver]" "[Bomb]" "[Poop]" "[Moon]" "[Sun]" "[Party]" "[Gift]" "[Packet]" "[Blessing]" "[Fireworks]"  "[Pig]" "[Waddle]" "[Tremble]" "[Twirl]"))
+
 (defvar wechat-emoji-locations-map nil)
 
 (defun wechat-emoji--locations-map ()
@@ -53,6 +56,7 @@
              do
              (setq i (/ idx  10))
              (setq j (% idx 10))
+             (puthash (nth idx wechat-emojis-en) (cons i j) table)
              (puthash (nth idx wechat-emojis) (cons i j) table))
     table))
 
