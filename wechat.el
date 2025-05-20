@@ -101,7 +101,7 @@
                                 wechat-unread-symbol)
                       "")
                     'face 'wechat-unread)
-                   (string-replace  "\n" "" (gethash "lastMessage" item))
+                   (string-replace "￼" "." (string-replace  "\n" "" (gethash "lastMessage" item)))
                    (gethash "lastDate" item))))
 
           json))
@@ -352,6 +352,10 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   (when wechat--chat-title
     (wechat--refresh-messages wechat--chat-title)))
 
+(defun wechat-refresh-chats ()
+  (interactive)
+  (wechat--refresh-chats))
+
 (defun wechat-check-in-foreground ()
   "Check if Emacs is foreground"
   (wechat--run-process
@@ -435,10 +439,11 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
 (define-derived-mode wechat-chat-list-mode tabulated-list-mode "Wechat Dialogues"
   "Major mode for handling a list of Wechat Dialogue."
   (let* ((max-width (min (window-width) wechat-chat-list-region-max-width))
+         (padding 9)
          (state-width 2)
          (last-date-width 20)
          (unread-width 10)
-         (rest-width (- max-width state-width last-date-width unread-width))
+         (rest-width (- max-width state-width last-date-width unread-width padding))
          (title-width (/ rest-width 3))
          (last-message-width (- rest-width title-width)))
     (setq tabulated-list-format (vector
@@ -452,6 +457,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   (setq buffer-read-only t)
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") 'wechat--show-at-point)
+    (define-key map (kbd "<f5>") #'wechat-refresh-chats)
     (use-local-map map)))
 
 
