@@ -75,7 +75,7 @@
                 (y (* height (car location))))
       (setq str
             (propertize
-             name
+             "."
              'display
              (list (list 'slice x y width height) image))))
     str))

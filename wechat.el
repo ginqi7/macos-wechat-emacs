@@ -25,6 +25,7 @@
 ;;; Code:
 
 (require 'wechat-emoji)
+(require 'shr)
 
 (defcustom wechat-cli (executable-find "wechat")
   "The path of wechat-cli command.")
@@ -56,10 +57,7 @@
   "The symbol to express unread.")
 
 (defcustom wechat-notification-time 3
-  "notification time")
-
-(defcustom wechat-emoji-directory nil
-  "Emoji directory.")
+  "The notification time")
 
 (defface wechat-message-user
   '((t (:foreground "#7757d6")))
@@ -165,6 +163,24 @@
     (set-left-margin (point-min) (point-max) margin)
     (set-right-margin (point-min) (point-max) margin)))
 
+(defun wechat--wrap-long-message ()
+  (save-excursion)
+  (goto-char (point-min))
+  (let* ((max-width (min wechat-message-region-max-width (window-width)))
+         (max-pixel-width (string-pixel-width (make-string max-width (string-to-char "-"))))
+         (pixel-width))
+    (while (not (equal (point) (point-max)))
+      (setq pixel-width (string-pixel-width (buffer-substring (point) (line-end-position))))
+      (if (< pixel-width (+ 10 max-pixel-width))
+          (beginning-of-line 2)
+        (print (current-line))
+        (print (wechat--forward-pixel (- max-pixel-width 10)))
+        (insert "\n " wechat-message-seperator " ")))))
+
+(defun wechat--forward-pixel (pixel)
+  (while (and (< (point) (line-end-position 1))
+              (< (shr-pixel-column) pixel))
+    (forward-char 1)))
 
 (defun wechat--insert-chat-detail (messages)
   "Insert Chat Detail in Current buffer."
@@ -179,6 +195,7 @@
           messages)
     (insert
      (wechat--format-date "Input"))
+    (wechat--wrap-long-message)
     (align-regexp (point-min) (point-max) (format "\\(\\s-*\\)%s" wechat-message-seperator))
     (add-text-properties (point-min) (1- (point-max)) '(read-only t))
     (insert (propertize wechat-input-prompt
@@ -191,8 +208,8 @@
 
 (defun wechat--run-process (program-and-args callback-fn)
   "Run PROGRAM-AND-ARGS and use the sentinel function to capture its complete output after the process terminates.
-PROGRAM-AND-ARGS is a list where the first element is the program path and the remaining elements are the arguments.
-CALLBACK-FN is a function that takes one parameter: the complete output string from the process."
+  PROGRAM-AND-ARGS is a list where the first element is the program path and the remaining elements are the arguments.
+  CALLBACK-FN is a function that takes one parameter: the complete output string from the process."
   (let* ((process-name "*wechat-async-proc*")
          (output-buffer-name (generate-new-buffer-name "*wechat-proc-output*"))
          (output-buffer (get-buffer-create output-buffer-name))
@@ -257,8 +274,8 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   (setq-local wechat--chat-title chat-name)
   (wechat--refresh-messages chat-name))
 
-(defun wechat--send-in-chat ()
-  "Send message in Chat."
+(defun wechat-send-in-chat ()
+  "Send a message entered in the chat."
   (interactive)
   (let ((title wechat--chat-title)
         (msg))
@@ -268,8 +285,8 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
       (delete-region (point) (point-max)))
     (wechat-send title msg)))
 
-(defun wechat--show-at-point ()
-  "Show Chat at point."
+(defun wechat-show-at-point ()
+  "Display chat messages at the current point."
   (interactive)
   (wechat-show (tabulated-list-get-id)))
 
@@ -316,7 +333,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   (wechat--refresh-chats))
 
 (defun wechat-send (&optional chat-name message)
-  "Send MESSAGE to CHAT-NAME."
+  "Send a message to the chat named CHAT-NAME."
   (interactive)
   (unless chat-name
     (setq chat-name
@@ -332,7 +349,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
                        (lambda (json) (wechat--refresh-messages chat-name))))
 
 (defun wechat-preview (&optional chat-name index)
-  "Preview MESSAGE in INDEX of CHAT-NAME."
+  "Preview the index-th message from the chat named CHAT-NAME."
   (interactive)
   (unless chat-name
     (setq chat-name
@@ -347,12 +364,14 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
                         index)
                        (lambda (json) ())))
 
-(defun wechat-refresh-message ()
+(defun wechat-refresh-messages ()
+  "Refresh messages"
   (interactive)
   (when wechat--chat-title
     (wechat--refresh-messages wechat--chat-title)))
 
 (defun wechat-refresh-chats ()
+  "Refresh the chat list"
   (interactive)
   (wechat--refresh-chats))
 
@@ -391,7 +410,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
                 (lambda (item)
                   (string= wechat--chat-title (gethash "title" item)))
                 wechat--unreads))
-      (wechat-refresh-message))))
+      (wechat-refresh-messages))))
 
 (defun wechat-start-notification ()
   "Start a timer to check notification."
@@ -426,11 +445,11 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
               (propertize (number-to-string (gethash "unread" item))
                           'face 'wechat-unread)))
            wechat--unreads)
-          ";")))
-    (when (not (string-empty-p unread-str))
-      (concat
-       wechat-unread-symbol
-       unread-str))))
+          ";"))))
+  (when (not (string-empty-p unread-str))
+    (concat
+     wechat-unread-symbol
+     unread-str)))
 
 (if (featurep 'awesome-tray)
     (add-to-list 'awesome-tray-module-alist
@@ -456,7 +475,7 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
   (tabulated-list-print t)
   (setq buffer-read-only t)
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "RET") 'wechat--show-at-point)
+    (define-key map (kbd "RET") 'wechat-show-at-point)
     (define-key map (kbd "<f5>") #'wechat-refresh-chats)
     (use-local-map map)))
 
@@ -464,8 +483,8 @@ CALLBACK-FN is a function that takes one parameter: the complete output string f
 (define-minor-mode wechat-chat-mode
   "Wechat chat mode."
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "<return>") #'wechat--send-in-chat)
-            (define-key map (kbd "<f5>") #'wechat-refresh-message)
+            (define-key map (kbd "<return>") #'wechat-send-in-chat)
+            (define-key map (kbd "<f5>") #'wechat-refresh-messages)
             map)
   :init-value nil)
 

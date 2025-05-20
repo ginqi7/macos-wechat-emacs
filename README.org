@@ -14,14 +14,18 @@ This project focuses solely on sending and reading messages without complex mana
 - [x] Show messages in a chat.
 - [x] Send a message to a chat.
 - [x] Preview images or links or videos.
+- [x] Show or Input WeChat Emoji.
 
 * Examples
 ** List chats
 [[file:examples/list-chats.png]]
 ** Show Messages
 [[file:examples/show-messages.png]]
-** Preview images
-[[file:examples/preview.png]]
+** Show or Input WeChat Emoji
+[[file:examples/show-input-emoji.png]]
+** Preview images or links or videos
+[[file:examples/preview.gif]]
+
 Click the buttonized-string, A WeChat preview window will appear.
 
 * Usage
@@ -59,6 +63,38 @@ Add the following line to your Emacs configuration file (e.g., `.emacs` or `init
 | wechat-cli          | The path of wechat-cli command          | (executable-find "wechat") |
 | wechat-common-chats | The list of wechat-cli Common Contacts. | nil                        |
 
+
+* Variables
+| Name                              | Docstring                               |
+|-----------------------------------+-----------------------------------------|
+| wechat-cli                        | The path of wechat-cli command.         |
+| wechat-common-chats               | The list of wechat-cli Common Contacts. |
+| wechat-input-prompt               | The prompt for input.                   |
+| wechat-message-seperator          | The separator for message.              |
+| wechat-message-date-seperator     | The separator for message date.         |
+| wechat-message-region-max-width   | The max width for message region.       |
+| wechat-chat-list-region-max-width | The max width for chat list region.     |
+| wechat-mute-symbol                | The symbol to express mute.             |
+| wechat-stick-symbol               | The symbol to express stick.            |
+| wechat-unread-symbol              | The symbol to express unread.           |
+| wechat-notification-time          | The notification time                   |
+
+* Interactive Commands
+| Name                        | Docstring                                                   |
+|-----------------------------+-------------------------------------------------------------|
+| wechat-show                 | Show a chat by CHAT-NAME.                                   |
+| wechat-send-in-chat         | Send a message entered in the chat.                         |
+| wechat-show-at-point        | Display chat messages at the current point.                 |
+| wechat-list-chats           | List All Chats.                                             |
+| wechat-send                 | Send a message to the chat named CHAT-NAME.                 |
+| wechat-preview              | Preview the index-th message from the chat named CHAT-NAME. |
+| wechat-refresh-messages     | Refresh messages                                            |
+| wechat-refresh-chats        | Refresh the chat list                                       |
+| wechat-start-notification   | Start a timer to check notification.                        |
+| wechat-restart-notification | Restart a timer to check notification.                      |
+| wechat-stop-notification    | Stop a timer to check notification.                         |
+
+
 * Identified Issues
-1. Unable to bind ~wechat--send-in-chat~ to multiple keys in the keymap.
+1. Unable to bind ~wechat-send-in-chat~ to multiple keys in the keymap.
 2. The current version of wechat-cli contains many hardcoded elements, limiting its support to Chinese only.

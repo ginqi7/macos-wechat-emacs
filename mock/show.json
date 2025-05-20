@@ -95,27 +95,15 @@
       "user": "xiaoming"
     },
     {
-      "date": "星期五 17:42",
-      "index": 18,
-      "message": "好",
-      "user": "我"
-    },
-    {
       "date": "星期五 18:03",
       "index": 20,
       "message": "一家人会搬出竹床，在门口一边乘凉一边谈天说地。",
       "user": "xiaoming"
     },
     {
-      "date": "星期五 18:03",
-      "index": 21,
-      "message": "好",
-      "user": "我"
-    },
-    {
       "date": "星期六 09:50",
       "index": 23,
-      "message": "发送了一个网页,蛙泳腿教学#游泳 #蛙泳 #游泳技巧 #蛙泳腿  #游泳教练肖鹏",
+      "message": "发送了一个网页,蛙泳腿教学#游泳",
       "user": "xiaoming"
     },
     {
@@ -127,5 +115,5 @@
   ],
   "stick": true,
   "title": "xiaoming",
-  "unread": 0
+  "unread": 3
 }
