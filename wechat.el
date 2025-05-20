@@ -24,6 +24,8 @@
 
 ;;; Code:
 
+(require 'wechat-emoji)
+
 (defcustom wechat-cli (executable-find "wechat")
   "The path of wechat-cli command.")
 
