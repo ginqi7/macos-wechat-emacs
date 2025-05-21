@@ -15,6 +15,7 @@ This project focuses solely on sending and reading messages without complex mana
 - [x] Send a message to a chat.
 - [x] Preview images or links or videos.
 - [x] Show or Input WeChat Emoji.
+- [x] Notifications and Auto-Refresh.
 
 * Examples
 ** List chats
@@ -25,6 +26,8 @@ This project focuses solely on sending and reading messages without complex mana
 [[file:examples/show-input-emoji.png]]
 ** Preview images or links or videos
 [[file:examples/preview.gif]]
+** Notification
+[[file:examples/notification.png]]
 
 Click the buttonized-string, A WeChat preview window will appear.
 
@@ -58,6 +61,19 @@ Add the following line to your Emacs configuration file (e.g., `.emacs` or `init
 #+begin_src emacs-lisp
   (require 'wechat)
 #+end_src
+
+** Notification and Refresh
+#+begin_src emacs-lisp
+  (add-to-list 'awesome-tray-active-modules "wechat-notification")
+  (wechat-restart-notification)
+#+end_src
+
+When you run =wechat-restart-notification=, it creates a timer to check for unread messages and displays the first unread chat in [[https://github.com/manateelazycat/awesome-tray][awesome-tray]].
+
+There is an issue with wechat-cli retrieving unread message information, so only the first unread chat is displayed.
+
+It will refresh the WeChat chats and message buffers upon opening.
+
 ** Variables
 | name                | description                             | default value              |
 | wechat-cli          | The path of wechat-cli command          | (executable-find "wechat") |

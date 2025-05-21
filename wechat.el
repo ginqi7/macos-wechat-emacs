@@ -73,6 +73,8 @@
 
 (defvar wechat--unreads nil)
 
+(defvar wechat--chats-json-str nil)
+
 (defvar wechat--emojis nil)
 
 (defvar wechat--input-marker nil)
@@ -173,8 +175,8 @@
       (setq pixel-width (string-pixel-width (buffer-substring (point) (line-end-position))))
       (if (< pixel-width (+ 10 max-pixel-width))
           (beginning-of-line 2)
-        (print (current-line))
-        (print (wechat--forward-pixel (- max-pixel-width 10)))
+        ;; (print (current-line))
+        ;; (print (wechat--forward-pixel (- max-pixel-width 10)))
         (insert "\n " wechat-message-seperator " ")))))
 
 (defun wechat--forward-pixel (pixel)
@@ -312,6 +314,7 @@
   (with-current-buffer (get-buffer-create "*WeChat Chats*")
     (let ((json (wechat--json-parse-string json-str))
           (buffer-read-only))
+      (setq wechat--chats-json-str json-str)
       (erase-buffer)
       (wechat-chat-list-mode)
       (setq tabulated-list-entries
@@ -411,6 +414,12 @@
                                 (> (gethash "unread" item) 0))
                               json)))
     (setq wechat--unreads unreads)
+
+    (when (and (equal major-mode 'wechat-chat-list-mode)
+               (not (string-prefix-p
+                     (substring json-str 4 -3)
+                     (substring wechat--chats-json-str 4))))
+      (wechat-refresh-chats))
     (when (and wechat--chat-title
                (seq-find
                 (lambda (item)
@@ -440,22 +449,15 @@
     (setq wechat--notification-timer nil)))
 
 (defun wechat-awesome-tray-notification ()
-  (let ((unread-str
-         (string-join
-          (mapcar
-           (lambda (item)
-             (format
-              "%s:%s"
-              (propertize (gethash "title" item)
-                          'face 'wechat-message-user)
-              (propertize (number-to-string (gethash "unread" item))
-                          'face 'wechat-unread)))
-           wechat--unreads)
-          ";"))))
-  (when (not (string-empty-p unread-str))
+  (when wechat--unreads
     (concat
      wechat-unread-symbol
-     unread-str)))
+     (format
+      "%s:%s"
+      (propertize (gethash "title" (car wechat--unreads))
+                  'face 'wechat-message-user)
+      (propertize (number-to-string (gethash "unread" (car wechat--unreads)))
+                  'face 'wechat-unread)))))
 
 (if (featurep 'awesome-tray)
     (add-to-list 'awesome-tray-module-alist
