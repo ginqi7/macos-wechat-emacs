@@ -182,7 +182,7 @@
               (< (shr-pixel-column) pixel))
     (forward-char 1)))
 
-(defun wechat--insert-chat-detail (messages)
+(defun wechat--insert-chat-detail (messages input)
   "Insert Chat Detail in Current buffer."
   (let* ((date "")
          (inhibit-read-only t))
@@ -204,7 +204,9 @@
                         'read-only t))
     (wechat--set-margin wechat-message-region-max-width)
     (setq-local wechat--input-marker (mark-marker))
-    (set-marker wechat--input-marker (point))))
+    (set-marker wechat--input-marker (point))
+    (when input
+      (insert input))))
 
 (defun wechat--run-process (program-and-args callback-fn)
   "Run PROGRAM-AND-ARGS and use the sentinel function to capture its complete output after the process terminates.
@@ -256,10 +258,14 @@
   (let* ((json (wechat--json-parse-string json-str))
          (title (gethash "title" json))
          (msgs (gethash "messages" json))
+         (input (when wechat--input-marker
+                  (buffer-substring
+                   (marker-position wechat--input-marker)
+                   (point-max))))
          (inhibit-read-only t))
     (with-current-buffer (get-buffer-create (format "*WeChat-%s*" title))
       (erase-buffer)
-      (wechat--insert-chat-detail msgs)
+      (wechat--insert-chat-detail msgs input)
       (message "Chat Detail Updated"))))
 
 (defun wechat-show (&optional chat-name only-visible)
