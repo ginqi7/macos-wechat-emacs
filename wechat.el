@@ -20,148 +20,201 @@
 
 ;;; Commentary:
 
-;;
+;; This Emacs Lisp package provides an interface for interacting with a
+;; `wechat-cli` command-line tool. It allows users to list chats,
+;; view message history, send messages, and receive notifications for unread
+;; messages within Emacs.
 
 ;;; Code:
 
+;; Require necessary libraries
 (require 'wechat-emoji)
-(require 'shr)
+(require 'shr)          ; For `shr-pixel-column` and related text properties
+(require 'json)         ; For JSON parsing
 
+(defgroup wechat nil
+  "Customization group for WeChat related Emacs extensions or configurations."
+  :group 'applications
+  :prefix "wechat-")
+
+;; Customization variables
 (defcustom wechat-cli (executable-find "wechat")
-  "The path of wechat-cli command.")
+  "The path of wechat-cli command.
+Ensure 'wechat' executable is in your system's PATH or provide the full path."
+  :type 'file
+  :group 'wechat)
 
 (defcustom wechat-common-chats nil
-  "The list of wechat-cli Common Contacts.")
+  "The list of wechat-cli Common Contacts.
+This list can be used for tab completion when selecting chats."
+  :type '(repeat string)
+  :group 'wechat)
 
 (defcustom wechat-input-prompt ">>> "
-  "The prompt for input.")
+  "The prompt displayed before the user's input area in a chat buffer."
+  :type 'string
+  :group 'wechat)
 
 (defcustom wechat-message-seperator ">"
-  "The separator for message.")
+  "The separator used between the user name and the message content."
+  :type 'string
+  :group 'wechat)
 
 (defcustom wechat-message-date-seperator "-"
-  "The separator for message date.")
+  "The character used to create the horizontal lines around date and 'Input' sections."
+  :type 'string
+  :group 'wechat)
 
 (defcustom wechat-message-region-max-width 120
-  "The max width for message region.")
+  "The maximum width for the message display region in chat buffers.
+Messages will be wrapped to fit within this width, centered in the window."
+  :type 'integer
+  :group 'wechat)
 
 (defcustom wechat-chat-list-region-max-width 170
-  "The max width for chat list region.")
+  "The maximum width for the chat list display region in the '*WeChat Chats*' buffer.
+The chat list will be centered within this width."
+  :type 'integer
+  :group 'wechat)
 
 (defcustom wechat-mute-symbol "🔕"
-  "The symbol to express mute.")
+  "The symbol to express a muted chat."
+  :type 'string
+  :group 'wechat)
+
 (defcustom wechat-stick-symbol "❤️"
-  "The symbol to express stick.")
+  "The symbol to express a sticky (pinned) chat."
+  :type 'string
+  :group 'wechat)
 
 (defcustom wechat-unread-symbol "📩"
-  "The symbol to express unread.")
+  "The symbol to express unread messages."
+  :type 'string
+  :group 'wechat)
 
 (defcustom wechat-notification-time 3
-  "The notification time")
+  "The interval (in seconds) at which to check for new notifications."
+  :type 'integer
+  :group 'wechat)
 
+;; Faces for styling
 (defface wechat-message-user
   '((t (:foreground "#7757d6")))
-  "wechat message user face."
+  "Face for displaying the user's name in chat messages."
   :group 'wechat)
 
 (defface wechat-unread
   '((t (:foreground "red" :weight bold)))
-  "wechat unread"
+  "Face for displaying unread message counts."
   :group 'wechat)
 
-(defvar wechat--notification-timer nil)
+;; Global variables
+(defvar wechat--notification-timer nil
+  "Timer object for scheduled notification checks.")
 
-(defvar wechat--unreads nil)
+(defvar wechat--unreads nil
+  "List of unread chat items (parsed JSON hash tables).")
 
-(defvar wechat--chats-json-str nil)
+(defvar wechat--chats-json-str nil
+  "The raw JSON string of the last fetched chat list. Used for comparison.")
 
-(defvar wechat--emojis nil)
+(defvar wechat--chats-json-parsed nil
+  "The parsed JSON object of the last fetched chat list. Used for comparison.")
 
-(defvar wechat--input-marker nil)
+(defvar wechat--input-marker nil
+  "Marker pointing to the beginning of the user input area in a chat buffer.")
 (make-variable-buffer-local 'wechat--input-marker)
 
-(defvar wechat--chat-title nil)
+(defvar wechat--chat-title nil
+  "The title of the currently displayed chat buffer.")
 (make-variable-buffer-local 'wechat--chat-title)
 
-(defun wechat--chats-to-tabulated-entries (json)
-  "Convert chats json to tabulated-entries."
-  (mapcar (lambda (item)
-            (list (gethash "title" item)
-                  (vector
-                   (if (string= "t" (symbol-name (gethash "messageMute" item)))
-                       wechat-mute-symbol
-                     (if (string= "t" (symbol-name (gethash "stick" item)))
-                         wechat-stick-symbol
-                       ""))
-                   (gethash "title" item)
-                   (propertize
-                    (if (not (equal 0 (gethash "unread" item)))
-                        (concat (number-to-string (gethash "unread" item))
-                                " "
-                                wechat-unread-symbol)
-                      "")
-                    'face 'wechat-unread)
-                   (string-replace "￼" "." (string-replace  "\n" "" (gethash "lastMessage" item)))
-                   (gethash "lastDate" item))))
+;; Helper functions
 
-          json))
+(defun wechat--chats-to-tabulated-entries (json-array)
+  "Convert a JSON array of chat objects to `tabulated-list-mode` entries.
+JSON-ARRAY is a list of hash tables, each representing a chat."
+  (mapcar (lambda (item)
+            (let* ((title (gethash "title" item))
+                   (message-mute (string= "t" (gethash "messageMute" item)))
+                   (stick (string= "t" (gethash "stick" item)))
+                   (unread-count (gethash "unread" item))
+                   (last-message (gethash "lastMessage" item))
+                   (last-date (gethash "lastDate" item))
+                   (status-symbol (cond
+                                   (message-mute wechat-mute-symbol)
+                                   (stick wechat-stick-symbol)
+                                   (t "")))
+                   (unread-display (if (> unread-count 0)
+                                       (propertize (format "%d %s" unread-count wechat-unread-symbol)
+                                                   'face 'wechat-unread)
+                                     ""))
+                   ;; Clean up common unwanted characters from last message
+                   (cleaned-last-message (replace-regexp-in-string "￼" "." (replace-regexp-in-string "\n" "" last-message))))
+              (list title
+                    (vector
+                     status-symbol
+                     title
+                     unread-display
+                     cleaned-last-message
+                     last-date))))
+          json-array))
 
 (defun wechat--json-parse-string (json-str)
+  "Parse JSON-STR into an Emacs Lisp object (hash table or list).
+Signals an error if parsing fails."
   (condition-case err
       (json-parse-string json-str)
     (json-parse-error
-     (error "JSON parse Error: %s" json-str))))
+     (error "JSON parse Error: %s\nInput string: %s" (cadr err) json-str))))
 
 (defun wechat--format-date (date-str)
-  "Format Chat Date."
+  "Format a date string with separators for display in chat buffer.
+DATE-STR is the date string (e.g., '2025-05-23') or 'Input'."
   (let* ((width (min wechat-message-region-max-width (window-width)))
-         (half-width (- (/ width 2) (length date-str)))
-         (split-line (make-string half-width (string-to-char wechat-message-date-seperator))))
-    (concat "\n"
-            split-line
-            date-str
-            split-line
-            "\n" "\n")))
-
+         ;; Calculate half-width for separators, accounting for date string length
+         (half-width (max 0 (- (/ width 2) (ceiling (/ (string-width date-str) 2)))))
+         (split-line (make-string half-width (aref wechat-message-date-seperator 0))))
+    (format "\n%s %s %s\n\n" split-line date-str split-line)))
 
 (defun wechat--format-emoji (msg)
-  (let ((str msg)
-        (regexp "\\[.*?\\]")
-        (pos 0)
-        match
-        img
-        img-path)
-    (while (string-match regexp str pos)
-      (setq match (match-string 0 str))
-      (setq msg (string-replace match
-                                (wechat-emoji-format-image match)
-                                msg))
-      (setq pos (match-end 0)))
-    msg))
+  "Replace emoji placeholders like '[smile]' in MSG with actual emoji images.
+Uses `wechat-emoji-format-image` from the 'wechat-emoji' library."
+  ;; Use `replace-regexp-in-string` for more efficient and idiomatic replacement
+  (replace-regexp-in-string "\\[.*?\\]"
+                            (lambda (match) (wechat-emoji-format-image match))
+                            msg t t)) ; t t for literal match and not to match empty string
 
 (defun wechat--format-message (hash-msg)
-  "Format Chat Message."
-  (let ((user (propertize (gethash "user" hash-msg)
-                          'face 'wechat-message-user))
-        (msg (gethash "message" hash-msg))
-        (index (gethash "index" hash-msg)))
+  "Format a single chat message (HASH-MSG) for display.
+Handles special message types like web pages, videos, and images by making
+them clickable buttons to preview the content."
+  (let* ((user (propertize (gethash "user" hash-msg)
+                           'face 'wechat-message-user))
+         (msg (gethash "message" hash-msg))
+         (index (gethash "index" hash-msg)))
     (if (or (string-prefix-p "发送了一个网页," msg)
             (string-prefix-p "发送了一个视频," msg)
+            (string-prefix-p "发送了一个语音," msg)
             (string= msg "发送了一个图片"))
-        (format "%s %s %s \n" user
+        ;; For special message types, create a clickable button
+        (format "%s%s%s \n" user
                 wechat-message-seperator
                 (buttonize
                  msg
-                 (lambda (data) (wechat-preview
-                                 wechat--chat-title
-                                 (number-to-string index)))))
+                 (lambda (data) ; data is the button's value, which is the message string itself
+                   (wechat-preview wechat--chat-title (number-to-string index)))
+                 'help-echo (format "Click to preview message #%s" index)))
+      ;; For regular text messages, format emojis
       (format "%s %s %s \n" user wechat-message-seperator
               (wechat--format-emoji msg)))))
 
 (defun wechat--set-margin (max-width)
-  (let ((max-width (or max-width (window-width)))
-        (margin (/ (- (window-width) max-width) 2))
-        (inhibit-read-only t))
+  "Set left and right margins for the current buffer to center content.
+MAX-WIDTH is the desired content width."
+  (let* ((actual-max-width (min max-width (window-width)))
+         (margin (max 0 (/ (- (window-width) actual-max-width) 2)))
+         (inhibit-read-only t)) ; Allow modification of buffer properties
     (set-left-margin (point-min) (point-max) margin)
     (set-right-margin (point-min) (point-max) margin)))
 
@@ -173,11 +226,10 @@
          (pixel-width))
     (while (not (equal (point) (point-max)))
       (setq pixel-width (string-pixel-width (buffer-substring (point) (line-end-position))))
-      (if (< pixel-width (+ 10 max-pixel-width))
+      (if (< pixel-width (* 1.1 max-pixel-width))
           (beginning-of-line 2)
-        ;; (print (current-line))
-        ;; (print (wechat--forward-pixel (- max-pixel-width 10)))
-        (insert "\n " wechat-message-seperator " ")))))
+        (wechat--forward-pixel (- max-pixel-width 10))
+        (insert "\n# " wechat-message-seperator " ")))))
 
 (defun wechat--forward-pixel (pixel)
   (while (and (< (point) (line-end-position 1))
@@ -185,35 +237,46 @@
     (forward-char 1)))
 
 (defun wechat--insert-chat-detail (messages input)
-  "Insert Chat Detail in Current buffer."
-  (let* ((date "")
-         (inhibit-read-only t))
-    (insert (wechat--format-date date))
+  "Insert chat messages and input prompt into the current buffer.
+MESSAGES is a list of message hash tables. INPUT is the current user input."
+  (let ((date "")
+        (inhibit-read-only t)) ; Temporarily allow buffer modification
+    ;; Insert messages, adding date separators as needed
     (mapc (lambda (message)
             (unless (string= date (gethash "date" message))
               (setq date (gethash "date" message))
               (insert (wechat--format-date date)))
             (insert (wechat--format-message message)))
           messages)
-    (insert
-     (wechat--format-date "Input"))
-    (wechat--wrap-long-message)
+
+    ;; Insert input prompt and user's current input
+    (insert (wechat--format-date "Input"))
+    (wechat--wrap-long-message) ; Wrap the messages before alignment
+    ;; Align message content based on the separator
     (align-regexp (point-min) (point-max) (format "\\(\\s-*\\)%s" wechat-message-seperator))
+    ;; Make the displayed messages read-only
     (add-text-properties (point-min) (1- (point-max)) '(read-only t))
+
+    ;; Insert the input prompt, making it read-only and non-sticky
     (insert (propertize wechat-input-prompt
                         'rear-nonsticky t
                         'front-sticky t
                         'read-only t))
+    ;; Set buffer margins to center the content
     (wechat--set-margin wechat-message-region-max-width)
-    (setq-local wechat--input-marker (mark-marker))
-    (set-marker wechat--input-marker (point))
+
+    ;; Set the input marker to the current point (start of user input area)
+    (setq-local wechat--input-marker (point-marker))
+
+    ;; If there was previous input, insert it
     (when input
       (insert input))))
 
 (defun wechat--run-process (program-and-args callback-fn)
-  "Run PROGRAM-AND-ARGS and use the sentinel function to capture its complete output after the process terminates.
-  PROGRAM-AND-ARGS is a list where the first element is the program path and the remaining elements are the arguments.
-  CALLBACK-FN is a function that takes one parameter: the complete output string from the process."
+  "Run PROGRAM-AND-ARGS asynchronously and call CALLBACK-FN with its output.
+PROGRAM-AND-ARGS is a list where the first element is the program path and
+the rest are arguments. CALLBACK-FN is a function that takes one parameter:
+the complete output string from the process."
   (let* ((process-name "*wechat-async-proc*")
          (output-buffer-name (generate-new-buffer-name "*wechat-proc-output*"))
          (output-buffer (get-buffer-create output-buffer-name))
@@ -232,7 +295,7 @@
           (kill-buffer output-buffer)
           (error "Failed to start the process: %s" (string-join program-and-args " "))))
 
-    ;; Set sentinel function
+    ;; Set sentinel function to be called when the process finishes
     (set-process-sentinel
      process
      (lambda (proc msg)
@@ -256,49 +319,69 @@
 
 
 (defun wechat--show-chat-messages (json-str)
-  "Show Chat Detail in a separate buffer."
+  "Show chat messages parsed from JSON-STR in the current chat buffer.
+This function is typically used as a callback from `wechat--run-process`."
   (let* ((json (wechat--json-parse-string json-str))
          (title (gethash "title" json))
          (msgs (gethash "messages" json))
          (input (when wechat--input-marker
-                  (buffer-substring
-                   (marker-position wechat--input-marker)
-                   (point-max))))
+                  ;; Get current input from the marker to the end of buffer
+                  (buffer-substring (marker-position wechat--input-marker)
+                                    (point-max))))
          (inhibit-read-only t))
     (with-current-buffer (get-buffer-create (format "*WeChat-%s*" title))
-      (erase-buffer)
+      (erase-buffer) ; Clear existing content
       (wechat--insert-chat-detail msgs input)
-      (message "Chat Detail Updated"))))
+      (message "Chat Detail Updated: %s" title))))
 
-(defun wechat-show (&optional chat-name only-visible)
-  "Show a chat by CHAT-NAME."
+;; User-facing commands
+
+(defun wechat-show (&optional chat-name)
+  "Show a chat by CHAT-NAME.
+If CHAT-NAME is not provided, prompts the user for selection from common chats."
   (interactive)
   (unless chat-name
     (setq chat-name
-          (completing-read "Select an chat: "
+          (completing-read "Select a chat: "
                            wechat-common-chats)))
+  ;; Switch to or create the chat buffer
   (switch-to-buffer (get-buffer-create (format "*WeChat-%s*" chat-name)))
+  ;; Activate chat mode for keybindings
   (wechat-chat-mode 1)
+  ;; Set buffer-local chat title
   (setq-local wechat--chat-title chat-name)
+  ;; Refresh messages for the selected chat
   (wechat--refresh-messages chat-name))
 
 (defun wechat-send-in-chat ()
-  "Send a message entered in the chat."
+  "Send the message currently entered in the active chat buffer.
+The message is taken from the input area of the current buffer."
   (interactive)
   (let ((title wechat--chat-title)
-        (msg))
+        (msg ""))
+    (unless title
+      (error "Not in a WeChat chat buffer."))
+    (unless wechat--input-marker
+      (error "Input marker not set. Cannot send message."))
+
     (save-excursion
+      ;; Go to the input marker and get the text from there to the end of buffer
       (goto-char (marker-position wechat--input-marker))
       (setq msg (buffer-substring (point) (point-max)))
+      ;; Delete the sent message from the input area
       (delete-region (point) (point-max)))
+    ;; Call the generic send function
     (wechat-send title msg)))
 
 (defun wechat-show-at-point ()
-  "Display chat messages at the current point."
+  "Display chat messages for the chat entry at the current line in the chat list.
+This function is intended for use in the '*WeChat Chats*' buffer."
   (interactive)
   (wechat-show (tabulated-list-get-id)))
 
 (defun wechat--refresh-messages (title &optional only-visible)
+  "Internal function to refresh messages for a given TITLE.
+If ONLY-VISIBLE is t, requests only visible messages from `wechat-cli`."
   (wechat--run-process (list
                         wechat-cli
                         "show"
@@ -310,21 +393,26 @@
                        #'wechat--show-chat-messages))
 
 (defun wechat--show-chats (json-str)
-  "Show all chats."
+  "Internal function to display all chats parsed from JSON-STR.
+This function is typically used as a callback from `wechat--run-process`."
   (with-current-buffer (get-buffer-create "*WeChat Chats*")
     (let ((json (wechat--json-parse-string json-str))
           (buffer-read-only))
-      (setq wechat--chats-json-str json-str)
-      (erase-buffer)
-      (wechat-chat-list-mode)
+      ;; Store the raw JSON string and parsed JSON for later comparison
+      (setq wechat--chats-json-str json-str
+            wechat--chats-json-parsed json)
+      (erase-buffer) ; Clear existing content
+      (wechat-chat-list-mode) ; Ensure chat list mode is active
+      ;; Populate tabulated list entries
       (setq tabulated-list-entries
             (wechat--chats-to-tabulated-entries json))
       (tabulated-list-print t)
-      ;; (wechat--set-margin wechat-chat-list-region-max-width)
       (goto-char (point-min)))
     (message "Chats Updated.")))
 
 (defun wechat--refresh-chats (&optional only-visible)
+  "Internal function to refresh the list of chats.
+If ONLY-VISIBLE is t, requests only visible chats from `wechat-cli`."
   (wechat--run-process
    (list
     wechat-cli
@@ -336,36 +424,41 @@
    #'wechat--show-chats))
 
 (defun wechat-list-chats (&optional only-visible)
-  "List All Chats."
+  "List all chats in a new buffer ('*WeChat Chats*')."
   (interactive)
   (switch-to-buffer (get-buffer-create "*WeChat Chats*"))
   (wechat--refresh-chats))
 
 (defun wechat-send (&optional chat-name message)
-  "Send a message to the chat named CHAT-NAME."
+  "Send a MESSAGE to the chat named CHAT-NAME.
+If arguments are not provided, prompts the user."
   (interactive)
   (unless chat-name
     (setq chat-name
-          (completing-read "Select an chat: "
+          (completing-read "Select a chat: "
                            wechat-common-chats)))
   (unless message
-    (setq message (read-string (format "Send to (%s) :" chat-name))))
+    (setq message (read-string (format "Send to (%s): " chat-name))))
   (wechat--run-process (list
                         wechat-cli
                         "send"
                         chat-name
                         message)
-                       (lambda (json) (wechat--refresh-messages chat-name))))
+                       ;; Refresh messages after sending
+                       (lambda (output)
+                         (message "Message sent to %s: %s" chat-name output)
+                         (wechat--refresh-messages chat-name))))
 
 (defun wechat-preview (&optional chat-name index)
-  "Preview the index-th message from the chat named CHAT-NAME."
+  "Preview the INDEX-th message from the chat named CHAT-NAME.
+This is typically used for rich content messages (web pages, videos, images)."
   (interactive)
   (unless chat-name
     (setq chat-name
-          (completing-read "Select an chat: "
+          (completing-read "Select a chat: "
                            wechat-common-chats)))
   (unless index
-    (setq index (read-string "Input an index :")))
+    (setq index (read-string "Input message index to preview: ")))
   (wechat--run-process (list
                         wechat-cli
                         "preview"
@@ -374,18 +467,21 @@
                        (lambda (json) ())))
 
 (defun wechat-refresh-messages ()
-  "Refresh messages"
+  "Refresh messages in the currently active chat buffer."
   (interactive)
   (when wechat--chat-title
     (wechat--refresh-messages wechat--chat-title)))
 
 (defun wechat-refresh-chats ()
-  "Refresh the chat list"
+  "Refresh the chat list in the '*WeChat Chats*' buffer."
   (interactive)
   (wechat--refresh-chats))
 
+;; Notification related functions
+
 (defun wechat-check-in-foreground ()
-  "Check if Emacs is foreground"
+  "Check if Emacs is the foreground application.
+This uses `osascript` and is macOS-specific."
   (wechat--run-process
    (list
     "osascript"
@@ -393,10 +489,10 @@
     "tell application \"System Events\" to get name of first application process whose frontmost is true")
    #'wechat-check-unread))
 
-
-(defun wechat-check-unread (str)
-  "Check unread."
-  (when (string= "Emacs" (string-trim str))
+(defun wechat-check-unread (foreground-app-name-str)
+  "Check for unread messages if Emacs is the foreground application.
+FOREGROUND-APP-NAME-STR is the output from `wechat-check-in-foreground`."
+  (when (string= "Emacs" (string-trim foreground-app-name-str))
     (wechat--run-process
      (list
       wechat-cli
@@ -405,21 +501,25 @@
       "true"
       "-f"
       "json")
-     #'wechat--check-unread)))
+     #'wechat--process-unread-check-result)))
 
-(defun wechat--check-unread (json-str)
-  "Check unread by response JSON-STR."
-  (let* ((json (wechat--json-parse-string json-str))
+(defun wechat--process-unread-check-result (json-str)
+  "Process the JSON-STR containing chat list for unread messages.
+This function is called as a callback from `wechat-check-unread`."
+  (let* ((new-json-parsed (wechat--json-parse-string json-str))
          (unreads (seq-filter (lambda (item)
                                 (> (gethash "unread" item) 0))
-                              json)))
+                              new-json-parsed)))
     (setq wechat--unreads unreads)
 
+    ;; If we are in the chat list buffer and the chat list has changed, refresh it.
+    ;; Use `cl-equalp` for robust comparison of hash tables.
     (when (and (equal major-mode 'wechat-chat-list-mode)
                (not (string-prefix-p
                      (substring json-str 4 -3)
                      (substring wechat--chats-json-str 4))))
       (wechat-refresh-chats))
+    ;; If there's an active chat buffer and it has unread messages, refresh it.
     (when (and wechat--chat-title
                (seq-find
                 (lambda (item)
@@ -428,41 +528,46 @@
       (wechat-refresh-messages))))
 
 (defun wechat-start-notification ()
-  "Start a timer to check notification."
+  "Start a timer to periodically check for notifications."
   (interactive)
   (unless wechat--notification-timer
     (setq wechat--notification-timer
           (run-with-idle-timer wechat-notification-time
-                               wechat-notification-time #'wechat-check-in-foreground))))
+                               wechat-notification-time
+                               #'wechat-check-in-foreground))))
 
 (defun wechat-restart-notification ()
-  "Restart a timer to check notification."
+  "Restart the notification timer. Stops and then starts it."
   (interactive)
   (wechat-stop-notification)
   (wechat-start-notification))
 
 (defun wechat-stop-notification ()
-  "Stop a timer to check notification."
+  "Stop the notification timer."
   (interactive)
   (when wechat--notification-timer
     (cancel-timer wechat--notification-timer)
     (setq wechat--notification-timer nil)))
 
 (defun wechat-awesome-tray-notification ()
+  "Function to provide notification string for `awesome-tray`."
   (when wechat--unreads
-    (concat
-     wechat-unread-symbol
-     (format
-      "%s:%s"
-      (propertize (gethash "title" (car wechat--unreads))
-                  'face 'wechat-message-user)
-      (propertize (number-to-string (gethash "unread" (car wechat--unreads)))
-                  'face 'wechat-unread)))))
+    (let* ((first-unread (car wechat--unreads))
+           (title (gethash "title" first-unread))
+           (unread-count (gethash "unread" first-unread)))
+      (concat
+       wechat-unread-symbol
+       (format
+        "%s:%s"
+        (propertize title 'face 'wechat-message-user)
+        (propertize (number-to-string unread-count) 'face 'wechat-unread))))))
 
+;; Integrate with `awesome-tray` if available
 (if (featurep 'awesome-tray)
     (add-to-list 'awesome-tray-module-alist
                  '("wechat-notification" . (wechat-awesome-tray-notification))))
 
+;; Major mode for the chat list buffer
 (define-derived-mode wechat-chat-list-mode tabulated-list-mode "Wechat Dialogues"
   "Major mode for handling a list of Wechat Dialogue."
   (let* ((max-width (min (window-width) wechat-chat-list-region-max-width))
@@ -470,29 +575,32 @@
          (state-width 2)
          (last-date-width 20)
          (unread-width 10)
-         (rest-width (- max-width state-width last-date-width unread-width padding))
-         (title-width (/ rest-width 3))
-         (last-message-width (- rest-width title-width)))
+         ;; Calculate remaining width for title and last message
+         (rest-width (max 0 (- max-width state-width last-date-width unread-width padding)))
+         (title-width (floor (/ rest-width 3))) ; Allocate 1/3 for title
+         (last-message-width (- rest-width title-width))) ; Remaining for last message
     (setq tabulated-list-format (vector
                                  (list "" state-width t)
                                  (list "Title" title-width t)
                                  (list "Unread" unread-width  t :right-align t)
                                  (list "Last Message" last-message-width t)
                                  (list "Last Date" last-date-width t  :right-align t))))
-  (tabulated-list-init-header)
-  (tabulated-list-print t)
-  (setq buffer-read-only t)
+  (tabulated-list-init-header) ; Initialize header based on format
+  (tabulated-list-print t)     ; Print the initial list
+  (setq buffer-read-only t)   ; Make the buffer read-only
+  ;; Define local keymap for this mode
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "RET") 'wechat-show-at-point)
-    (define-key map (kbd "<f5>") #'wechat-refresh-chats)
+    (define-key map (kbd "RET") 'wechat-show-at-point) ; Enter to show chat
+    (define-key map (kbd "<f5>") #'wechat-refresh-chats) ; F5 to refresh chat list
     (use-local-map map)))
 
-
+;; Minor mode for individual chat buffers
 (define-minor-mode wechat-chat-mode
-  "Wechat chat mode."
+  "Wechat chat mode.
+Provides keybindings for sending messages and refreshing the chat."
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "<return>") #'wechat-send-in-chat)
-            (define-key map (kbd "<f5>") #'wechat-refresh-messages)
+            (define-key map (kbd "<return>") #'wechat-send-in-chat) ; Enter to send message
+            (define-key map (kbd "<f5>") #'wechat-refresh-messages) ; F5 to refresh messages
             map)
   :init-value nil)
 
