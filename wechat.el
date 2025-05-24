@@ -108,18 +108,11 @@ The chat list will be centered within this width."
   "Face for displaying unread message counts."
   :group 'wechat)
 
-;; Global variables
-(defvar wechat--notification-timer nil
-  "Timer object for scheduled notification checks.")
-
 (defvar wechat--unreads nil
   "List of unread chat items (parsed JSON hash tables).")
 
 (defvar wechat--chats-json-str nil
   "The raw JSON string of the last fetched chat list. Used for comparison.")
-
-(defvar wechat--chats-json-parsed nil
-  "The parsed JSON object of the last fetched chat list. Used for comparison.")
 
 (defvar wechat--input-marker nil
   "Marker pointing to the beginning of the user input area in a chat buffer.")
@@ -128,6 +121,9 @@ The chat list will be centered within this width."
 (defvar wechat--chat-title nil
   "The title of the currently displayed chat buffer.")
 (make-variable-buffer-local 'wechat--chat-title)
+
+(defvar wechat--notify-process nil
+  "The WeChat Notification Process.")
 
 ;; Helper functions
 
@@ -399,8 +395,7 @@ This function is typically used as a callback from `wechat--run-process`."
     (let ((json (wechat--json-parse-string json-str))
           (buffer-read-only))
       ;; Store the raw JSON string and parsed JSON for later comparison
-      (setq wechat--chats-json-str json-str
-            wechat--chats-json-parsed json)
+      (setq wechat--chats-json-str json-str)
       (erase-buffer) ; Clear existing content
       (wechat-chat-list-mode) ; Ensure chat list mode is active
       ;; Populate tabulated list entries
@@ -478,30 +473,18 @@ This is typically used for rich content messages (web pages, videos, images)."
   (wechat--refresh-chats))
 
 ;; Notification related functions
-
-(defun wechat-check-in-foreground ()
-  "Check if Emacs is the foreground application.
-This uses `osascript` and is macOS-specific."
-  (wechat--run-process
-   (list
-    "osascript"
-    "-e"
-    "tell application \"System Events\" to get name of first application process whose frontmost is true")
-   #'wechat-check-unread))
-
 (defun wechat-check-unread (foreground-app-name-str)
   "Check for unread messages if Emacs is the foreground application.
 FOREGROUND-APP-NAME-STR is the output from `wechat-check-in-foreground`."
-  (when (string= "Emacs" (string-trim foreground-app-name-str))
-    (wechat--run-process
-     (list
-      wechat-cli
-      "list-chats"
-      "-o"
-      "true"
-      "-f"
-      "json")
-     #'wechat--process-unread-check-result)))
+  (wechat--run-process
+   (list
+    wechat-cli
+    "list-chats"
+    "-o"
+    "true"
+    "-f"
+    "json")
+   #'wechat--process-unread-check-result))
 
 (defun wechat--process-unread-check-result (json-str)
   "Process the JSON-STR containing chat list for unread messages.
@@ -527,14 +510,20 @@ This function is called as a callback from `wechat-check-unread`."
                 wechat--unreads))
       (wechat-refresh-messages))))
 
+(defun wechat--notify-filter (process string)
+  (wechat-check-unread nil))
+
 (defun wechat-start-notification ()
   "Start a timer to periodically check for notifications."
   (interactive)
-  (unless wechat--notification-timer
-    (setq wechat--notification-timer
-          (run-with-idle-timer wechat-notification-time
-                               wechat-notification-time
-                               #'wechat-check-in-foreground))))
+  (unless wechat--notify-process
+    (let* ((process-name "wechat-notify")
+           (command wechat-cli)
+           (args '("notify"))
+           (process (apply 'start-process process-name nil  command args)))
+      (setq wechat--notify-process process)
+      (set-process-filter process 'wechat--notify-filter)
+      (message "Wechat Notify process has started..."))))
 
 (defun wechat-restart-notification ()
   "Restart the notification timer. Stops and then starts it."
@@ -545,9 +534,9 @@ This function is called as a callback from `wechat-check-unread`."
 (defun wechat-stop-notification ()
   "Stop the notification timer."
   (interactive)
-  (when wechat--notification-timer
-    (cancel-timer wechat--notification-timer)
-    (setq wechat--notification-timer nil)))
+  (when wechat--notify-process
+    (kill-process wechat--notify-process)
+    (setq wechat--notify-process nil)))
 
 (defun wechat-awesome-tray-notification ()
   "Function to provide notification string for `awesome-tray`."
